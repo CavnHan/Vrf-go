@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/CavnHan/Vrf-go/database/utils"
 	_ "github.com/CavnHan/Vrf-go/database/utils/serializers"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type BlockHeader struct {
@@ -30,6 +30,7 @@ type BlocksView interface {
 	BlockHeaderWithFilter(BlockHeader) (*BlockHeader, error)
 	BlockHeaderWithScope(func(db *gorm.DB) *gorm.DB) (*BlockHeader, error)
 	LatestBlockHeader() (*BlockHeader, error)
+	BlockHeaderByNumber(*big.Int) (*BlockHeader, error)
 }
 
 type BlocksDB interface {
@@ -39,6 +40,10 @@ type BlocksDB interface {
 
 type blocksDB struct {
 	gorm *gorm.DB
+}
+
+func (b blocksDB) BlockHeaderByNumber(number *big.Int) (*BlockHeader, error) {
+	return b.BlockHeaderWithFilter(BlockHeader{Number: number})
 }
 
 func (b blocksDB) BlockHeader(hash common.Hash) (*BlockHeader, error) {

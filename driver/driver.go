@@ -159,7 +159,7 @@ func (de *DriverEingine) fulfillRandomWords(ctx context.Context, requestId *big.
 
 }
 
-func (de *DriverEingine) FulfillRandomWords(ctx context.Context, requestId *big.Int, randomList []*big.Int) (*types.Receipt, error) {
+func (de *DriverEingine) FulfillRandomWords(requestId *big.Int, randomList []*big.Int) (*types.Receipt, error) {
 	//构建交易
 	tx, err := de.fulfillRandomWords(de.Ctx, requestId, randomList)
 	if err != nil {

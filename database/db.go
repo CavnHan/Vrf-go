@@ -15,7 +15,7 @@ import (
 	"github.com/CavnHan/Vrf-go/database/event"
 	_ "github.com/CavnHan/Vrf-go/database/utils/serializers"
 	"github.com/CavnHan/Vrf-go/database/worker"
-	"github.com/CavnHan/Vrf-go/synchromizer/retry"
+	"github.com/CavnHan/Vrf-go/synchronizer/retry"
 )
 
 type DB struct {

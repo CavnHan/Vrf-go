@@ -1,8 +1,6 @@
 package contracts
 
 import (
-	"context"
-	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -17,7 +15,6 @@ import (
 	"github.com/CavnHan/Vrf-go/database"
 	"github.com/CavnHan/Vrf-go/database/event"
 	"github.com/CavnHan/Vrf-go/database/worker"
-	"github.com/CavnHan/Vrf-go/synchronizer/retry"
 )
 
 type Vrf struct {
@@ -45,15 +42,18 @@ func NewVrf() (*Vrf, error) {
 
 }
 
-func (vf *Vrf) ProcessVrfEvent(db *database.DB, VrfAddress string, startHeight, endHeight *big.Int) error {
-	contractFilter := event.ContractEvent{ContractAddress: common.HexToAddress(VrfAddress)}
-	contractEventList,err := db.ContractEvent.ContractEventsWithFilter(contractFilter,startHeight,endHeight)
-	if err != nil {
-		log.Error("Failed to get contract event list")
-		return err
-	}
+func (vf *Vrf) ProcessVrfEvent(db *database.DB, VrfAddress string, startHeight, endHeight *big.Int) ([]worker.RequestSend,[]worker.FillRandomWords,error) {
 	var RequestSendList []worker.RequestSend
 	var FillRandomWordList []worker.FillRandomWords
+
+	//get evnet with address filter
+	contractFilter := event.ContractEvent{ContractAddress: common.HexToAddress(VrfAddress)}
+	contractEventList,err := db.ContractEvent.ContractEventsWithFilter(contractFilter,startHeight,endHeight)
+
+	if err != nil {
+		log.Error("Failed to get contract event list")
+		return RequestSendList,FillRandomWordList,err
+	}
 	for _,contractEvent := range contractEventList {
 		//check if the event is RequestSent
 		if contractEvent.EventSignature.String() == vf.VrfAbi.Events["RequestSent"].ID.String(){
@@ -61,7 +61,7 @@ func (vf *Vrf) ProcessVrfEvent(db *database.DB, VrfAddress string, startHeight, 
 			requestSendEvent,err := vf.VrfFilter.ParseRequestSend(*contractEvent.RLPLog)
 			if err != nil {
 				log.Error("Failed to parse RequestSend event")
-				return err
+				return RequestSendList, FillRandomWordList, err
 			}
 			log.Info("Request sent event", "RequestId", requestSendEvent.RequestId, "NumWords", requestSendEvent.Numwords, "Current", requestSendEvent.Current)
 			rs := worker.RequestSend{
@@ -78,7 +78,7 @@ func (vf *Vrf) ProcessVrfEvent(db *database.DB, VrfAddress string, startHeight, 
 			fillRandomWords, err := vf.VrfFilter.ParseFillRandomWords(*contractEvent.RLPLog)
 			if err != nil {
 				log.Error("parse fill random fail", "err", err)
-				return err
+				return RequestSendList,FillRandomWordList,err
 			}
 			log.Info("Fill random words event", "RequestId", fillRandomWords.RequestId, "RandomWords", fillRandomWords.RandomWords)
 			var sb strings.Builder
@@ -101,24 +101,5 @@ func (vf *Vrf) ProcessVrfEvent(db *database.DB, VrfAddress string, startHeight, 
 		}
 		
 	}
-	retryStrategy := &retry.ExponentialStrategy{Min: 1000, Max: 20_000, MaxJitter: 250}
-	if _, err := retry.Do[interface{}](context.Background(), 10, retryStrategy, func() (interface{}, error) {
-		if err := db.Transaction(func(tx *database.DB) error {
-			if err := tx.FillRandomWords.StoreFillRandomWords(FillRandomWordList); err != nil {
-				return err
-			}
-			if err := tx.RequestSend.StoreRequestSend(RequestSendList); err != nil {
-				return err
-			}
-			return nil
-		}); err != nil {
-			log.Info("unable to persist batch", err)
-			return nil, fmt.Errorf("unable to persist batch: %w", err)
-		}
-		return nil, nil
-	}); err != nil {
-		return err
-	}
-
-	return nil
+	return RequestSendList,FillRandomWordList,nil
 }
